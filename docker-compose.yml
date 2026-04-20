@@ -1,0 +1,88 @@
+services:
+  # Main Operational DB
+  db:
+    image: postgres:15-alpine
+    container_name: nirnayx-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+      POSTGRES_DB: nirnayx
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Celery Task Queue (No Eviction)
+  redis-queue:
+    image: redis:7-alpine
+    container_name: nirnayx-redis-queue
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis-queue.conf
+    volumes:
+      - ./infra/redis-queue.conf:/usr/local/etc/redis/redis-queue.conf:ro
+    ports:
+      - "6379:6379"
+
+  # Fast Volatile Cache (LRU)
+  redis-cache:
+    image: redis:7-alpine
+    container_name: nirnayx-redis-cache
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis-cache.conf
+    volumes:
+      - ./infra/redis-cache.conf:/usr/local/etc/redis/redis-cache.conf:ro
+    ports:
+      - "6380:6380"
+
+  # Redpanda Stream 
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: nirnayx-redpanda
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp 1 
+      - --memory 1G 
+      - --reserve-memory 0M 
+      - --node-id 0 
+      - --check=false
+    ports:
+      - "9092:9092"
+      
+  # Core FastAPI API
+  api:
+    build: ./backend
+    container_name: nirnayx-api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_password@db:5432/nirnayx
+      - REDIS_URL=redis://redis-queue:6379/0
+      - CACHE_URL=redis://redis-cache:6380/0
+      - REDPANDA_URL=redpanda:9092
+      - DEBUG=True
+    depends_on:
+      - db
+      - redis-queue
+      - redis-cache
+      - redpanda
+
+  # Celery Worker for background jury processing
+  worker:
+    build: ./backend
+    container_name: nirnayx-worker
+    restart: always
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_password@db:5432/nirnayx
+      - REDIS_URL=redis://redis-queue:6379/0
+      - CACHE_URL=redis://redis-cache:6380/0
+    depends_on:
+      - db
+      - redis-queue
+      - redis-cache
+      
+volumes:
+  postgres_data:

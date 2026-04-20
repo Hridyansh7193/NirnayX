@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.production
+venv/
+.venv/
+
+# Build
+.next/
+out/
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+PRD_content.txt
+extract_docx.ps1
+
+# Testing
+coverage/
+.pytest_cache/
+htmlcov/
+
+# Logs
+*.log
+npm-debug.log*
